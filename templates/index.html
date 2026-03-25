@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blockchain Simulation Demo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <header class="hero">
+      <div>
+        <h1>Blockchain Simulation Control Room</h1>
+        <p class="subtitle">Controller + 3 independent node servers with step-by-step classroom actions.</p>
+      </div>
+      <div class="chips">
+        <span class="chip">Online Nodes: {{ online_nodes }}/{{ total_nodes }}</span>
+        <span class="chip">Last Updated: {{ last_updated }}</span>
+      </div>
+    </header>
+
+    <section class="panel controls">
+      <h2>Actions</h2>
+      <form method="post" action="{{ url_for('action') }}" class="button-grid">
+        <button type="submit" name="op" value="start_mining_all">Start Mining (All Servers)</button>
+        <button type="submit" name="op" value="mine_a">Mine Block (Server A)</button>
+        <button type="submit" name="op" value="mine_b">Mine Block (Server B)</button>
+        <button type="submit" name="op" value="consensus">Apply Consensus</button>
+        <button type="submit" name="op" value="invalid_attack">Simulate Invalid Block Attack</button>
+        <button type="submit" name="op" value="attack_51">Simulate 51% Attack</button>
+        <button type="submit" name="op" value="performance">Show Performance Metrics</button>
+        <button type="submit" name="op" value="reset" class="danger">Reset System</button>
+      </form>
+    </section>
+
+    <section class="panel state">
+      <h2>Node State and Block Properties</h2>
+      <div class="state-grid">
+        {% for server, details in state.items() %}
+          <article class="state-card">
+            <div class="card-head">
+              <h3>{{ server }}</h3>
+              <span class="status {{ 'online' if details.online == 'Yes' else 'offline' }}">{{ details.online }}</span>
+            </div>
+            <p class="endpoint"><a href="{{ details.endpoint }}" target="_blank" rel="noopener">{{ details.endpoint }}</a></p>
+
+            <div class="kv-grid">
+              <p><strong>Chain Valid:</strong> {{ details.chain_valid }}</p>
+              <p><strong>Chain Length:</strong> {{ details.chain_length }}</p>
+              <p><strong>Last Index:</strong> {{ details.last_index }}</p>
+              <p><strong>Nonce:</strong> {{ details.last_nonce }}</p>
+              <p><strong>Mined Blocks:</strong> {{ details.mined_blocks }}</p>
+              <p><strong>Nonce Attempts:</strong> {{ details.nonce_attempts }}</p>
+              <p><strong>Avg Mining Time:</strong> {{ details.avg_mining_time }}</p>
+              <p><strong>Throughput:</strong> {{ details.throughput }}</p>
+              <p><strong>Avg Receive Delay:</strong> {{ details.avg_receive_delay }}</p>
+            </div>
+
+            <div class="hashes">
+              <p><strong>Timestamp:</strong><br>{{ details.last_timestamp }}</p>
+              <p><strong>Data:</strong><br>{{ details.last_data }}</p>
+              <p><strong>Previous Hash:</strong><br><span>{{ details.last_previous_hash }}</span></p>
+              <p><strong>Hash:</strong><br><span>{{ details.last_hash }}</span></p>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel logs">
+      <div class="logs-head">
+        <h2>Output Logs</h2>
+        <div class="inline-controls">
+          <button type="button" id="toggleRefresh">Pause Auto Refresh</button>
+          <button type="button" id="jumpBottom">Jump to Latest</button>
+        </div>
+      </div>
+      <div class="log-box">
+        {% for line in logs %}
+          <div>{{ line }}</div>
+        {% endfor %}
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const logBox = document.querySelector('.log-box');
+    const jumpBtn = document.getElementById('jumpBottom');
+    const refreshBtn = document.getElementById('toggleRefresh');
+    let autoRefresh = true;
+
+    function jumpToBottom() {
+      if (logBox) {
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+
+    jumpToBottom();
+
+    if (jumpBtn) {
+      jumpBtn.addEventListener('click', jumpToBottom);
+    }
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', () => {
+        autoRefresh = !autoRefresh;
+        refreshBtn.textContent = autoRefresh ? 'Pause Auto Refresh' : 'Resume Auto Refresh';
+      });
+    }
+
+    setInterval(() => {
+      if (autoRefresh) {
+        window.location.reload();
+      }
+    }, 5000);
+  </script>
+</body>
+</html>
