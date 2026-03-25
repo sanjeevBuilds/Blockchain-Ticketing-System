@@ -31,10 +31,11 @@ class NodeServer:
         self.create_genesis_block()
 
     def create_genesis_block(self) -> None:
+        # All nodes must share the exact same genesis block so inter-node validation works.
         genesis = Block(
             index=0,
-            timestamp=now_str(),
-            data=f"Genesis Block ({self.name})",
+            timestamp="2026-01-01 00:00:00",
+            data="Genesis Block",
             previous_hash="0",
             nonce=0,
             hash="",

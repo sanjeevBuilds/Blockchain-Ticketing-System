@@ -76,6 +76,86 @@ h1 {
   font-size: 1.1rem;
 }
 
+.txn-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.txn-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.txn-form input {
+  border: 1px solid #cfdad4;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 0.92rem;
+  color: var(--text);
+  background: #ffffff;
+}
+
+.txn-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+button.accent {
+  background: #e6f6ef;
+  border-color: #b3dcc8;
+  color: #0f6e48;
+  font-weight: 700;
+  text-align: center;
+}
+
+button.secondary {
+  background: #eef2ff;
+  border-color: #cbd5ff;
+  color: #3346a8;
+  font-weight: 700;
+  text-align: center;
+}
+
+.pending-wrap {
+  border: 1px dashed #c9d8d0;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 14px;
+  background: #f9fcfa;
+}
+
+.pending-wrap h3 {
+  margin: 0 0 8px;
+  font-size: 0.96rem;
+}
+
+.pending-list {
+  max-height: 120px;
+  overflow: auto;
+  display: grid;
+  gap: 6px;
+}
+
+.pending-item {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.82rem;
+  border: 1px solid #d7e3dc;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 7px 8px;
+}
+
+.empty-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .button-grid {
   display: grid;
   gap: 10px;

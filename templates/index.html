@@ -20,6 +20,44 @@
     </header>
 
     <section class="panel controls">
+      <h2>Add Ticket Transaction (Before Mining)</h2>
+      <form method="post" action="{{ url_for('action') }}" class="txn-form">
+        <input type="hidden" name="op" value="add_transaction">
+        <label>
+          Passenger Name
+          <input type="text" id="passengerName" name="passenger_name" placeholder="e.g., Rahul Verma" required>
+        </label>
+        <label>
+          Source
+          <input type="text" id="sourceCity" name="source" placeholder="e.g., Delhi" required>
+        </label>
+        <label>
+          Destination
+          <input type="text" id="destinationCity" name="destination" placeholder="e.g., Mumbai" required>
+        </label>
+        <label>
+          Number of Tickets
+          <input type="number" id="ticketCount" name="ticket_count" min="1" step="1" value="1" required>
+        </label>
+        <button type="button" id="generateDemo" class="secondary">Generate Demo</button>
+        <button type="submit" class="accent">Add Transaction</button>
+      </form>
+
+      <div class="pending-wrap">
+        <h3>Pending Transactions Queue ({{ pending_transactions|length }})</h3>
+        {% if pending_transactions %}
+          <div class="pending-list">
+            {% for tx in pending_transactions %}
+              <div class="pending-item">
+                <strong>{{ tx.id }}</strong> | {{ tx.passenger }} | {{ tx.source }} -> {{ tx.destination }} | tickets={{ tx.tickets }}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="empty-note">No pending transactions. Add one before mining.</p>
+        {% endif %}
+      </div>
+
       <h2>Actions</h2>
       <form method="post" action="{{ url_for('action') }}" class="button-grid">
         <button type="submit" name="op" value="start_mining_all">Start Mining (All Servers)</button>
@@ -71,7 +109,7 @@
       <div class="logs-head">
         <h2>Output Logs</h2>
         <div class="inline-controls">
-          <button type="button" id="toggleRefresh">Pause Auto Refresh</button>
+          <button type="button" id="toggleRefresh">Enable Auto Refresh</button>
           <button type="button" id="jumpBottom">Jump to Latest</button>
         </div>
       </div>
@@ -87,7 +125,12 @@
     const logBox = document.querySelector('.log-box');
     const jumpBtn = document.getElementById('jumpBottom');
     const refreshBtn = document.getElementById('toggleRefresh');
-    let autoRefresh = true;
+    const generateDemoBtn = document.getElementById('generateDemo');
+    const passengerInput = document.getElementById('passengerName');
+    const sourceInput = document.getElementById('sourceCity');
+    const destinationInput = document.getElementById('destinationCity');
+    const ticketInput = document.getElementById('ticketCount');
+    let autoRefresh = false;
 
     function jumpToBottom() {
       if (logBox) {
@@ -104,7 +147,29 @@
     if (refreshBtn) {
       refreshBtn.addEventListener('click', () => {
         autoRefresh = !autoRefresh;
-        refreshBtn.textContent = autoRefresh ? 'Pause Auto Refresh' : 'Resume Auto Refresh';
+        refreshBtn.textContent = autoRefresh ? 'Disable Auto Refresh' : 'Enable Auto Refresh';
+      });
+    }
+
+    if (generateDemoBtn && passengerInput && sourceInput && destinationInput && ticketInput) {
+      const passengers = ['Aarav Sharma', 'Priya Nair', 'Rohan Mehta', 'Neha Gupta', 'Vikram Singh'];
+      const routes = [
+        ['Delhi', 'Mumbai'],
+        ['Bengaluru', 'Hyderabad'],
+        ['Chennai', 'Kolkata'],
+        ['Pune', 'Ahmedabad'],
+        ['Jaipur', 'Lucknow']
+      ];
+
+      generateDemoBtn.addEventListener('click', () => {
+        const passenger = passengers[Math.floor(Math.random() * passengers.length)];
+        const route = routes[Math.floor(Math.random() * routes.length)];
+        const tickets = Math.floor(Math.random() * 5) + 1;
+
+        passengerInput.value = passenger;
+        sourceInput.value = route[0];
+        destinationInput.value = route[1];
+        ticketInput.value = tickets;
       });
     }
 
@@ -112,7 +177,7 @@
       if (autoRefresh) {
         window.location.reload();
       }
-    }, 5000);
+    }, 10000);
   </script>
 </body>
 </html>

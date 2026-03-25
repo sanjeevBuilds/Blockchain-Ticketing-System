@@ -20,6 +20,7 @@ NODE_URLS = {
 
 logs: List[str] = []
 broadcast_delays: List[float] = []
+pending_transactions: List[Dict[str, str | int]] = []
 
 
 def now_str() -> str:
@@ -29,6 +30,46 @@ def now_str() -> str:
 def add_log(section: str, message: str) -> None:
     ts = datetime.now().strftime("%H:%M:%S")
     logs.append(f"[{ts}] --- {section.upper()} --- {message}")
+
+
+def add_transaction(passenger: str, source: str, destination: str, tickets: int) -> bool:
+    passenger = passenger.strip()
+    source = source.strip()
+    destination = destination.strip()
+
+    if not passenger or not source or not destination:
+        add_log("TRANSACTION", "Failed to add transaction: all fields are required")
+        return False
+    if tickets <= 0:
+        add_log("TRANSACTION", "Failed to add transaction: number of tickets must be at least 1")
+        return False
+
+    tx = {
+        "id": f"TX-{len(pending_transactions) + 1}-{int(time.time())}",
+        "timestamp": now_str(),
+        "passenger": passenger,
+        "source": source,
+        "destination": destination,
+        "tickets": tickets,
+    }
+    pending_transactions.append(tx)
+    add_log(
+        "TRANSACTION",
+        f"Added transaction {tx['id']}: {passenger} | {source} -> {destination} | tickets={tickets}",
+    )
+    return True
+
+
+def consume_next_transaction(miner_name: str) -> str | None:
+    if not pending_transactions:
+        add_log("MINING", f"{miner_name}: no pending transaction. Add Transaction before mining.")
+        return None
+
+    tx = pending_transactions.pop(0)
+    return (
+        f"TicketTxn id={tx['id']} ts={tx['timestamp']} passenger={tx['passenger']} "
+        f"source={tx['source']} destination={tx['destination']} tickets={tx['tickets']}"
+    )
 
 
 def call_node(node_name: str, method: str, path: str, payload: Dict | None = None) -> Dict:
@@ -114,7 +155,9 @@ def broadcast_block(sender_name: str, block: Dict) -> None:
 
 def start_mining_all() -> None:
     add_log("MINING", "Start Mining (All Servers) clicked")
-    mining_data = f"Shared transaction set at {now_str()}"
+    mining_data = consume_next_transaction("All Servers")
+    if mining_data is None:
+        return
 
     results: List[Tuple[str, Dict, float, int]] = []
     for node_name in NODE_URLS:
@@ -142,7 +185,11 @@ def start_mining_all() -> None:
 
 def mine_single(node_name: str) -> None:
     add_log("MINING", f"Mine Block ({node_name}) clicked")
-    response = call_node(node_name, "POST", "/mine", {"data": f"Block from {node_name} at {now_str()}"})
+    mining_data = consume_next_transaction(node_name)
+    if mining_data is None:
+        return
+
+    response = call_node(node_name, "POST", "/mine", {"data": mining_data})
     if not response.get("ok", False):
         return
 
@@ -298,6 +345,7 @@ def show_performance_metrics() -> None:
 def reset_system() -> None:
     logs.clear()
     broadcast_delays.clear()
+    pending_transactions.clear()
     for node_name in NODE_URLS:
         call_node(node_name, "POST", "/reset")
     add_log("SYSTEM", "System reset complete")
@@ -317,6 +365,7 @@ def index():
         online_nodes=online_nodes,
         total_nodes=len(NODE_URLS),
         last_updated=datetime.now().strftime("%H:%M:%S"),
+        pending_transactions=pending_transactions,
     )
 
 
@@ -324,7 +373,18 @@ def index():
 def action():
     op = request.form.get("op", "")
 
-    if op == "start_mining_all":
+    if op == "add_transaction":
+        passenger = request.form.get("passenger_name", "")
+        source = request.form.get("source", "")
+        destination = request.form.get("destination", "")
+        tickets_raw = request.form.get("ticket_count", "1")
+        try:
+            tickets = int(tickets_raw)
+        except ValueError:
+            tickets = 0
+        add_transaction(passenger, source, destination, tickets)
+
+    elif op == "start_mining_all":
         start_mining_all()
     elif op == "mine_a":
         mine_single("Server A")
