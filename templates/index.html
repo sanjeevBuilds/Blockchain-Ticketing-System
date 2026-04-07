@@ -14,8 +14,8 @@
         <p class="subtitle">Controller + 3 independent node servers with step-by-step classroom actions.</p>
       </div>
       <div class="chips">
-        <span class="chip">Online Nodes: {{ online_nodes }}/{{ total_nodes }}</span>
-        <span class="chip">Last Updated: {{ last_updated }}</span>
+        <span class="chip" id="chipOnlineNodes">Online Nodes: {{ online_nodes }}/{{ total_nodes }}</span>
+        <span class="chip" id="chipLastUpdated">Last Updated: {{ last_updated }}</span>
       </div>
     </header>
 
@@ -44,9 +44,9 @@
       </form>
 
       <div class="pending-wrap">
-        <h3>Pending Transactions Queue ({{ pending_transactions|length }})</h3>
+        <h3 id="pendingCount">Pending Transactions Queue ({{ pending_transactions|length }})</h3>
         {% if pending_transactions %}
-          <div class="pending-list">
+          <div class="pending-list" id="pendingList">
             {% for tx in pending_transactions %}
               <div class="pending-item">
                 <strong>{{ tx.id }}</strong> | {{ tx.passenger }} | {{ tx.source }} -> {{ tx.destination }} | tickets={{ tx.tickets }}
@@ -54,7 +54,9 @@
             {% endfor %}
           </div>
         {% else %}
-          <p class="empty-note">No pending transactions. Add one before mining.</p>
+          <div class="pending-list" id="pendingList">
+            <p class="empty-note">No pending transactions. Add one before mining.</p>
+          </div>
         {% endif %}
       </div>
 
@@ -75,30 +77,30 @@
       <h2>Node State and Block Properties</h2>
       <div class="state-grid">
         {% for server, details in state.items() %}
-          <article class="state-card">
+          <article class="state-card" data-server="{{ server }}">
             <div class="card-head">
               <h3>{{ server }}</h3>
-              <span class="status {{ 'online' if details.online == 'Yes' else 'offline' }}">{{ details.online }}</span>
+              <span class="status {{ 'online' if details.online == 'Yes' else 'offline' }} js-online">{{ details.online }}</span>
             </div>
             <p class="endpoint"><a href="{{ details.endpoint }}" target="_blank" rel="noopener">{{ details.endpoint }}</a></p>
 
             <div class="kv-grid">
-              <p><strong>Chain Valid:</strong> {{ details.chain_valid }}</p>
-              <p><strong>Chain Length:</strong> {{ details.chain_length }}</p>
-              <p><strong>Last Index:</strong> {{ details.last_index }}</p>
-              <p><strong>Nonce:</strong> {{ details.last_nonce }}</p>
-              <p><strong>Mined Blocks:</strong> {{ details.mined_blocks }}</p>
-              <p><strong>Nonce Attempts:</strong> {{ details.nonce_attempts }}</p>
-              <p><strong>Avg Mining Time:</strong> {{ details.avg_mining_time }}</p>
-              <p><strong>Throughput:</strong> {{ details.throughput }}</p>
-              <p><strong>Avg Receive Delay:</strong> {{ details.avg_receive_delay }}</p>
+              <p><strong>Chain Valid:</strong> <span class="js-chain-valid">{{ details.chain_valid }}</span></p>
+              <p><strong>Chain Length:</strong> <span class="js-chain-length">{{ details.chain_length }}</span></p>
+              <p><strong>Last Index:</strong> <span class="js-last-index">{{ details.last_index }}</span></p>
+              <p><strong>Nonce:</strong> <span class="js-last-nonce">{{ details.last_nonce }}</span></p>
+              <p><strong>Mined Blocks:</strong> <span class="js-mined-blocks">{{ details.mined_blocks }}</span></p>
+              <p><strong>Nonce Attempts:</strong> <span class="js-nonce-attempts">{{ details.nonce_attempts }}</span></p>
+              <p><strong>Avg Mining Time:</strong> <span class="js-avg-mining-time">{{ details.avg_mining_time }}</span></p>
+              <p><strong>Throughput:</strong> <span class="js-throughput">{{ details.throughput }}</span></p>
+              <p><strong>Avg Receive Delay:</strong> <span class="js-avg-receive-delay">{{ details.avg_receive_delay }}</span></p>
             </div>
 
             <div class="hashes">
-              <p><strong>Timestamp:</strong><br>{{ details.last_timestamp }}</p>
-              <p><strong>Data:</strong><br>{{ details.last_data }}</p>
-              <p><strong>Previous Hash:</strong><br><span>{{ details.last_previous_hash }}</span></p>
-              <p><strong>Hash:</strong><br><span>{{ details.last_hash }}</span></p>
+              <p><strong>Timestamp:</strong><br><span class="js-last-timestamp">{{ details.last_timestamp }}</span></p>
+              <p><strong>Data:</strong><br><span class="js-last-data">{{ details.last_data }}</span></p>
+              <p><strong>Previous Hash:</strong><br><span class="js-last-previous-hash">{{ details.last_previous_hash }}</span></p>
+              <p><strong>Hash:</strong><br><span class="js-last-hash">{{ details.last_hash }}</span></p>
             </div>
           </article>
         {% endfor %}
@@ -130,7 +132,13 @@
     const sourceInput = document.getElementById('sourceCity');
     const destinationInput = document.getElementById('destinationCity');
     const ticketInput = document.getElementById('ticketCount');
-    let autoRefresh = false;
+    let autoRefresh = true;
+
+    const chipOnlineNodes = document.getElementById('chipOnlineNodes');
+    const chipLastUpdated = document.getElementById('chipLastUpdated');
+    const pendingCount = document.getElementById('pendingCount');
+    const pendingList = document.getElementById('pendingList');
+    const stateCards = document.querySelectorAll('.state-card[data-server]');
 
     function jumpToBottom() {
       if (logBox) {
@@ -145,10 +153,111 @@
     }
 
     if (refreshBtn) {
+      refreshBtn.textContent = autoRefresh ? 'Disable Auto Refresh' : 'Enable Auto Refresh';
       refreshBtn.addEventListener('click', () => {
         autoRefresh = !autoRefresh;
         refreshBtn.textContent = autoRefresh ? 'Disable Auto Refresh' : 'Enable Auto Refresh';
       });
+    }
+
+    function setCardText(card, selector, value) {
+      const el = card.querySelector(selector);
+      if (el) {
+        el.textContent = value;
+      }
+    }
+
+    function refreshStateCards(state) {
+      stateCards.forEach((card) => {
+        const serverName = card.dataset.server;
+        const details = state?.[serverName];
+        if (!details) return;
+
+        const onlineEl = card.querySelector('.js-online');
+        if (onlineEl) {
+          onlineEl.textContent = details.online;
+          onlineEl.classList.remove('online', 'offline');
+          onlineEl.classList.add(details.online === 'Yes' ? 'online' : 'offline');
+        }
+
+        setCardText(card, '.js-chain-valid', details.chain_valid);
+        setCardText(card, '.js-chain-length', details.chain_length);
+        setCardText(card, '.js-last-index', details.last_index);
+        setCardText(card, '.js-last-nonce', details.last_nonce);
+        setCardText(card, '.js-mined-blocks', details.mined_blocks);
+        setCardText(card, '.js-nonce-attempts', details.nonce_attempts);
+        setCardText(card, '.js-avg-mining-time', details.avg_mining_time);
+        setCardText(card, '.js-throughput', details.throughput);
+        setCardText(card, '.js-avg-receive-delay', details.avg_receive_delay);
+        setCardText(card, '.js-last-timestamp', details.last_timestamp);
+        setCardText(card, '.js-last-data', details.last_data);
+        setCardText(card, '.js-last-previous-hash', details.last_previous_hash);
+        setCardText(card, '.js-last-hash', details.last_hash);
+      });
+    }
+
+    function refreshPendingTransactions(transactions) {
+      if (!pendingCount || !pendingList) return;
+      const list = Array.isArray(transactions) ? transactions : [];
+      pendingCount.textContent = `Pending Transactions Queue (${list.length})`;
+
+      pendingList.innerHTML = '';
+      if (!list.length) {
+        const empty = document.createElement('p');
+        empty.className = 'empty-note';
+        empty.textContent = 'No pending transactions. Add one before mining.';
+        pendingList.appendChild(empty);
+        return;
+      }
+
+      list.forEach((tx) => {
+        const row = document.createElement('div');
+        row.className = 'pending-item';
+        const idStrong = document.createElement('strong');
+        idStrong.textContent = tx.id;
+        row.appendChild(idStrong);
+        row.appendChild(
+          document.createTextNode(
+            ` | ${tx.passenger} | ${tx.source} -> ${tx.destination} | tickets=${tx.tickets}`
+          )
+        );
+        pendingList.appendChild(row);
+      });
+    }
+
+    function refreshLogs(lines) {
+      if (!logBox) return;
+      const stickToBottom = logBox.scrollTop + logBox.clientHeight >= logBox.scrollHeight - 8;
+      logBox.innerHTML = '';
+      (lines || []).forEach((line) => {
+        const row = document.createElement('div');
+        row.textContent = line;
+        logBox.appendChild(row);
+      });
+      if (stickToBottom) {
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+    }
+
+    async function refreshDashboard() {
+      if (!autoRefresh) return;
+      try {
+        const response = await fetch('/dashboard_data', { cache: 'no-store' });
+        const data = await response.json();
+        if (!data.ok) return;
+
+        if (chipOnlineNodes) {
+          chipOnlineNodes.textContent = `Online Nodes: ${data.online_nodes}/${data.total_nodes}`;
+        }
+        if (chipLastUpdated) {
+          chipLastUpdated.textContent = `Last Updated: ${data.last_updated}`;
+        }
+        refreshStateCards(data.state);
+        refreshPendingTransactions(data.pending_transactions);
+        refreshLogs(data.logs);
+      } catch (_err) {
+        // Keep current UI values when a single refresh call fails.
+      }
     }
 
     if (generateDemoBtn && passengerInput && sourceInput && destinationInput && ticketInput) {
@@ -173,11 +282,7 @@
       });
     }
 
-    setInterval(() => {
-      if (autoRefresh) {
-        window.location.reload();
-      }
-    }, 10000);
+    setInterval(refreshDashboard, 1500);
   </script>
 </body>
 </html>

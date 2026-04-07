@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 
 import requests
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 from blockchain_core import validate_chain_dicts
 
@@ -21,6 +21,7 @@ NODE_URLS = {
 logs: List[str] = []
 broadcast_delays: List[float] = []
 pending_transactions: List[Dict[str, str | int]] = []
+pending_block_proposals: List[Dict[str, Dict | str]] = []
 
 
 def now_str() -> str:
@@ -136,21 +137,50 @@ def state_snapshot() -> Dict[str, Dict[str, str]]:
     return snapshot
 
 
-def broadcast_block(sender_name: str, block: Dict) -> None:
-    add_log("BROADCAST", f"{sender_name} broadcasting block #{block['index']}...")
-    for node_name in NODE_URLS:
-        delay = random.uniform(0.08, 0.2)
-        time.sleep(delay)
-        broadcast_delays.append(delay)
-        add_log(
-            "BROADCAST",
-            f"{node_name} received block #{block['index']} after {delay:.4f}s and is validating...",
-        )
-        result = call_node(node_name, "POST", "/receive_block", {"block": block})
-        if result.get("accepted"):
-            add_log("BROADCAST", f"{node_name} validation success: block added")
-        else:
-            add_log("BROADCAST", f"{node_name} validation failed: block rejected")
+def queue_block_for_consensus(sender_name: str, block: Dict) -> None:
+    pending_block_proposals.append({"sender": sender_name, "block": block})
+    add_log(
+        "MINING",
+        f"{sender_name} queued block #{block['index']} for consensus. "
+        "It will be verified only when Apply Consensus is clicked.",
+    )
+
+
+def append_to_miner_locally(miner_name: str, block: Dict) -> None:
+    result = call_node(miner_name, "POST", "/append_block_local", {"block": block})
+    if result.get("accepted"):
+        add_log("MINING", f"{miner_name} locally appended block #{block['index']} (chain length increased)")
+    else:
+        add_log("MINING", f"{miner_name} local append failed for block #{block.get('index', 'N/A')}")
+
+
+def verify_and_append_pending_blocks() -> None:
+    if not pending_block_proposals:
+        add_log("CONSENSUS", "No queued mined blocks to verify.")
+        return
+
+    while pending_block_proposals:
+        proposal = pending_block_proposals.pop(0)
+        sender_name = str(proposal.get("sender", "Unknown"))
+        block = proposal.get("block", {})
+        if not isinstance(block, dict) or "index" not in block:
+            add_log("CONSENSUS", "Skipped malformed queued block proposal")
+            continue
+
+        add_log("CONSENSUS", f"Verifying queued block #{block['index']} mined by {sender_name}")
+        for node_name in NODE_URLS:
+            delay = random.uniform(0.08, 0.2)
+            time.sleep(delay)
+            broadcast_delays.append(delay)
+            add_log(
+                "CONSENSUS",
+                f"{node_name} validating block #{block['index']} after {delay:.4f}s delay...",
+            )
+            result = call_node(node_name, "POST", "/receive_block", {"block": block})
+            if result.get("accepted"):
+                add_log("CONSENSUS", f"{node_name} accepted block #{block['index']}")
+            else:
+                add_log("CONSENSUS", f"{node_name} rejected block #{block['index']}")
 
 
 def start_mining_all() -> None:
@@ -180,7 +210,8 @@ def start_mining_all() -> None:
 
     winner_name, winner_block, winner_time, _ = min(results, key=lambda item: item[2])
     add_log("MINING", f"Winner: {winner_name} (fastest mining time: {winner_time:.4f}s)")
-    broadcast_block(winner_name, winner_block)
+    append_to_miner_locally(winner_name, winner_block)
+    queue_block_for_consensus(winner_name, winner_block)
 
 
 def mine_single(node_name: str) -> None:
@@ -199,11 +230,14 @@ def mine_single(node_name: str) -> None:
         f"{node_name} mined block #{block['index']} in {response['effective_time']:.4f}s "
         f"(nonce attempts: {response['attempts']})",
     )
-    broadcast_block(node_name, block)
+    append_to_miner_locally(node_name, block)
+    queue_block_for_consensus(node_name, block)
 
 
 def apply_consensus() -> None:
     add_log("CONSENSUS", "Apply Consensus clicked")
+    verify_and_append_pending_blocks()
+
     chains: Dict[str, List[Dict]] = {}
     before_lengths: Dict[str, int] = {}
 
@@ -260,30 +294,24 @@ def simulate_invalid_block_attack() -> None:
 
 def simulate_51_percent_attack() -> None:
     add_log("ATTACK", "Simulate 51% Attack clicked")
-    call_node("Server C", "POST", "/set_power", {"power": 2.5})
-    add_log("ATTACK", "Server C gets higher mining power and mines faster")
+    call_node("Server A", "POST", "/set_power", {"power": 1.8})
+    call_node("Server B", "POST", "/set_power", {"power": 1.8})
+    call_node("Server C", "POST", "/set_power", {"power": 0.7})
+    add_log("ATTACK", "Server A + Server B act as majority miners and extend the chain faster")
 
-    # Sync attacker with longest valid public chain before private mining.
-    chains = []
-    for node_name in NODE_URLS:
-        response = call_node(node_name, "GET", "/chain")
-        if response.get("ok") and validate_chain_dicts(response["chain"]):
-            chains.append(response["chain"])
-    if chains:
-        longest = max(chains, key=len)
-        call_node("Server C", "POST", "/replace_chain", {"chain": longest})
-
-    for i in range(3):
+    # A and B mine additional private/public blocks on their own chains.
+    for i in range(4):
+        target = "Server A" if i % 2 == 0 else "Server B"
         response = call_node(
-            "Server C",
+            target,
             "POST",
             "/mine_and_append",
-            {"data": f"51% attacker private block {i + 1} at {now_str()}"},
+            {"data": f"Majority coalition block {i + 1} at {now_str()}"},
         )
         if response.get("ok", False):
             add_log(
                 "ATTACK",
-                f"Server C mined extra block #{response['block']['index']} in "
+                f"{target} mined and appended block #{response['block']['index']} in "
                 f"{response['effective_time']:.4f}s (nonce attempts: {response['attempts']})",
             )
 
@@ -292,9 +320,22 @@ def simulate_51_percent_attack() -> None:
         chain_resp = call_node(node_name, "GET", "/chain")
         if chain_resp.get("ok"):
             lengths[node_name] = len(chain_resp["chain"])
-    add_log("ATTACK", f"Chain lengths after attack mining: {lengths}")
-    add_log("ATTACK", "Applying consensus to see if network adopts attacker chain")
+    server_c_before = lengths.get("Server C", "N/A")
+    add_log("ATTACK", f"Chain lengths after majority mining (A+B): {lengths}")
+    add_log("ATTACK", "Applying consensus so Server C adopts the longest chain")
     apply_consensus()
+
+    after_lengths = {}
+    for node_name in NODE_URLS:
+        chain_resp = call_node(node_name, "GET", "/chain")
+        if chain_resp.get("ok"):
+            after_lengths[node_name] = len(chain_resp["chain"])
+    server_c_after = after_lengths.get("Server C", "N/A")
+    add_log("ATTACK", f"Post-consensus lengths: {after_lengths}")
+    add_log("ATTACK", f"Server C chain length changed from {server_c_before} to {server_c_after}")
+
+    call_node("Server A", "POST", "/set_power", {"power": 1.0})
+    call_node("Server B", "POST", "/set_power", {"power": 1.0})
     call_node("Server C", "POST", "/set_power", {"power": 1.0})
 
 
@@ -346,6 +387,7 @@ def reset_system() -> None:
     logs.clear()
     broadcast_delays.clear()
     pending_transactions.clear()
+    pending_block_proposals.clear()
     for node_name in NODE_URLS:
         call_node(node_name, "POST", "/reset")
     add_log("SYSTEM", "System reset complete")
@@ -366,6 +408,23 @@ def index():
         total_nodes=len(NODE_URLS),
         last_updated=datetime.now().strftime("%H:%M:%S"),
         pending_transactions=pending_transactions,
+    )
+
+
+@app.get("/dashboard_data")
+def dashboard_data():
+    state = state_snapshot()
+    online_nodes = sum(1 for details in state.values() if details["online"] == "Yes")
+    return jsonify(
+        {
+            "ok": True,
+            "state": state,
+            "logs": logs[-300:],
+            "online_nodes": online_nodes,
+            "total_nodes": len(NODE_URLS),
+            "last_updated": datetime.now().strftime("%H:%M:%S"),
+            "pending_transactions": pending_transactions,
+        }
     )
 
 

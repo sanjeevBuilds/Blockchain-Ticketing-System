@@ -316,6 +316,26 @@ def create_app(node_name: str) -> Flask:
         add_log(f"Received block #{block.index}, accepted={accepted}, delay={delay:.4f}s")
         return jsonify({"ok": True, "accepted": accepted, "delay": delay})
 
+    @app.post("/append_block_local")
+    def append_block_local():
+        payload = request.get_json(silent=True) or {}
+        item = payload.get("block")
+        if not item:
+            return jsonify({"ok": False, "accepted": False, "error": "missing block"}), 400
+
+        block = Block(
+            index=int(item["index"]),
+            timestamp=str(item["timestamp"]),
+            data=str(item["data"]),
+            previous_hash=str(item["previous_hash"]),
+            nonce=int(item["nonce"]),
+            hash=str(item["hash"]),
+        )
+
+        accepted = node.append_valid_block(block)
+        add_log(f"Locally appended mined block #{block.index}, accepted={accepted}")
+        return jsonify({"ok": True, "accepted": accepted})
+
     @app.post("/replace_chain")
     def replace_chain():
         payload = request.get_json(silent=True) or {}
